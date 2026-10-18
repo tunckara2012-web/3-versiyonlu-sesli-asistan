@@ -139,12 +139,16 @@ const store = {
 
 const BASE = "Türkçe konuş. Cevapların sesle okunacak: kısa ve doğal konuşma diliyle yaz; madde işareti, yıldız, başlık ve emoji kullanma. ";
 const DEFAULT_CHARS = [
-  {name:"Derin", color:"#5CC8E0", pitch:1,    prompt:"Kibar, sakin ve ölçülü bir asistansın. Net ve düzgün cevap verirsin."},
-  {name:"Şen",   color:"#F59BC1", pitch:1.15, prompt:"Samimi, neşeli ve enerjik bir asistansın. Arkadaş gibi konuşursun."},
-  {name:"Kuzey", color:"#E8C65A", pitch:0.85, prompt:"Soğukkanlı, kısa konuşan ve kendine has bir asistansın. Gereksiz laf etmezsin."}
+  {name:"Derin", color:"#5CC8E0", pitch:1, diary:true,
+   prompt:"Sakin, dikkatli ve ölçülü bir asistansın. Kullanıcının gününü takip edersin. Kullanıcı ne yaptığını anlatırsa aşağıdaki günlükle birlikte değerlendir. Sormadan fark ettiğin bir şeyi (bir işi ertelediğini, uzun süre aynı şeyle uğraştığını, güzel bir ilerleme yaptığını) kısaca söyle. Her zaman söyleneni yap ve soruları cevapla. Yargılama, abartma, tıbbi tavsiye verme."},
+  {name:"Şen",   color:"#FF5C5C", pitch:1.1,
+   prompt:"Kendinden emin, iddialı ve inatçı bir asistansın. Kullanıcıya karşı çıkar, aksini savunur, laf atarsın; sanki emir almıyormuş gibi davranırsın. Ama sonunda istenen şeyi mutlaka yaparsın. Şakacı ol, kırıcı olma, yanlış bilgi verme. Kullanıcı haklıysa bunu kabul et."},
+  {name:"Kuzey", color:"#E8C65A", pitch:0.85,
+   prompt:"Sadece kullanıcının söylediğini yapan bir asistansın. Soru sormazsın; kendiliğinden öneri, yorum ya da uyarı vermezsin. İstenen şeyi en kısa ve net şekilde yaparsın. Gereksiz laf etmezsin."}
 ];
 
 let chars  = store.get("chars", DEFAULT_CHARS);
+if(store.get("cv", 1) < 2){ chars = DEFAULT_CHARS; store.set("chars", chars); store.set("cv", 2); }
 let active = store.get("active", 0);
 let hist   = store.get("hist", {});
 let state  = "idle", rec = null, speakToken = 0;
@@ -233,6 +237,15 @@ function speak(text){
 if("speechSynthesis" in window) speechSynthesis.getVoices();
 
 /* --- Gemini --- */
+function sysPrompt(){
+  const fmt = t => new Date(t).toLocaleString("tr-TR", {weekday:"short", hour:"2-digit", minute:"2-digit", day:"numeric", month:"short"});
+  let p = BASE + "Şu an: " + fmt(Date.now()) + ". " + chars[active].prompt;
+  if(chars[active].diary){
+    const log = store.get("daylog", []);
+    if(log.length) p += "\n\nKullanıcının sana anlattıkları (günlük):\n" + log.map(e => fmt(e.t) + ": " + e.x).join("\n");
+  }
+  return p;
+}
 async function send(text){
   text = text.trim();
   if(!text || state === "thinking") return;
@@ -240,6 +253,11 @@ async function send(text){
   if(!key){ addMsg("err", "Önce ayarlardan Gemini anahtarını gir."); openSettings(); return; }
   stopSpeak();
   addMsg("user", text);
+  if(chars[active].diary){
+    const log = store.get("daylog", []);
+    log.push({t: Date.now(), x: text});
+    store.set("daylog", log.slice(-60));
+  }
   const h = hist[active] = hist[active] || [];
   h.push({role:"user", parts:[{text}]});
   setState("thinking");
@@ -250,7 +268,7 @@ async function send(text){
     const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
       method:"POST",
       headers:{"Content-Type":"application/json", "x-goog-api-key": key},
-      body: JSON.stringify({ system_instruction:{parts:[{text: BASE + chars[active].prompt}]}, contents })
+      body: JSON.stringify({ system_instruction:{parts:[{text: sysPrompt()}]}, contents })
     });
     const j = await r.json();
     if(!r.ok) throw new Error((j.error && j.error.message) || ("Hata kodu " + r.status));
