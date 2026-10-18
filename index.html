@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sesli AI</title>
+<meta name="theme-color" content="#151A2E">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#151A2E; --surface:#1F2640; --line:#2E3760; --text:#EEF0FA; --muted:#8D94B5;
+  --accent:#5CC8E0; --on-accent:#0B1220; --danger:#FF8C8C;
+  box-sizing:border-box;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:17px;line-height:1.45;
+  display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);
+}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+#chips{display:flex;gap:8px;flex:1;overflow-x:auto}
+.chip{
+  background:transparent;border:1.5px solid var(--line);color:var(--muted);
+  padding:8px 16px;border-radius:999px;white-space:nowrap;font-weight:600;
+}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.icon-btn{background:transparent;border:0;padding:8px;border-radius:50%;color:var(--muted);display:grid;place-items:center}
+.icon-btn svg{width:24px;height:24px}
+
+#log{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:12px}
+.empty{margin:auto;text-align:center;color:var(--muted);max-width:28ch}
+.empty strong{display:block;color:var(--text);font-size:1.15em;margin-bottom:6px}
+.msg{max-width:88%;padding:10px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--surface);border-radius:18px 18px 4px 18px}
+.msg.ai{align-self:flex-start;border-left:3px solid var(--accent);padding-left:12px}
+.msg.err{align-self:center;color:var(--danger);text-align:center;font-size:.95em}
+
+footer{padding:10px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:12px}
+#status{min-height:1.4em;color:var(--muted);font-size:.95em}
+#orb{
+  width:84px;height:84px;border-radius:50%;border:0;position:relative;
+  background:var(--accent);color:var(--on-accent);display:grid;place-items:center;
+}
+#orb svg{width:36px;height:36px}
+#orb::before{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid var(--accent);opacity:.35}
+#orb.listening::before{animation:pulse 1.2s ease-out infinite}
+#orb.thinking::before{border-style:dashed;opacity:.8;animation:spin 2.4s linear infinite}
+#orb.speaking{animation:talk .7s ease-in-out infinite alternate}
+@keyframes pulse{from{transform:scale(1);opacity:.6}to{transform:scale(1.35);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes talk{from{transform:scale(1)}to{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){#orb,#orb::before{animation:none!important}}
+
+form{display:flex;gap:8px;width:100%}
+#txt{flex:1;min-width:0;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:11px 14px}
+#txt::placeholder{color:var(--muted)}
+.send{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:0 16px;font-weight:600}
+
+dialog{
+  background:var(--bg);color:var(--text);border:1.5px solid var(--line);border-radius:16px;
+  width:min(92vw,520px);max-height:88dvh;padding:0;
+}
+dialog::backdrop{background:rgba(5,8,18,.7)}
+.sheet{padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:88dvh}
+.sheet h2{margin:0;font-size:1.2em}
+.sheet h3{margin:6px 0 0;font-size:1em;color:var(--accent)}
+label{display:flex;flex-direction:column;gap:5px;font-size:.92em;color:var(--muted)}
+.sheet input,.sheet textarea{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text)}
+.sheet textarea{min-height:76px;resize:vertical}
+.hint{font-size:.88em;color:var(--muted);margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{background:var(--accent);color:var(--on-accent);border:0;border-radius:12px;padding:11px 18px;font-weight:700}
+.btn.ghost{background:transparent;color:var(--muted);border:1.5px solid var(--line)}
+.charbox{display:flex;flex-direction:column;gap:8px;padding-top:6px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<header>
+  <div id="chips" role="group" aria-label="Karakter seç"></div>
+  <button class="icon-btn" id="openSettings" aria-label="Ayarlar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<main id="log" aria-live="polite"></main>
+
+<footer>
+  <div id="status"></div>
+  <button id="orb" aria-label="Konuşmak için dokun">
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0h-2a5 5 0 0 1-10 0H5zM11 19.9V22h2v-2.1z"/></svg>
+  </button>
+  <form id="form" autocomplete="off">
+    <input id="txt" placeholder="Ya da buraya yaz" aria-label="Mesaj">
+    <button class="send" type="submit">Gönder</button>
+  </form>
+</footer>
+
+<dialog id="settings">
+  <div class="sheet">
+    <h2>Ayarlar</h2>
+    <label>Gemini anahtarı
+      <input id="keyIn" type="password" autocomplete="off" placeholder="aistudio.google.com adresinden al">
+    </label>
+    <p class="hint">Anahtar sadece bu telefondaki tarayıcıda saklanır, hiçbir yere gönderilmez (Google'a soru sorarken hariç).</p>
+    <label>Model adı
+      <input id="modelIn" autocomplete="off">
+    </label>
+    <p class="hint">Hata alırsan AI Studio'da yazan güncel bir Gemini Flash model adını buraya yaz.</p>
+    <label>Konuşma hızı
+      <input id="rateIn" type="range" min="0.7" max="1.4" step="0.05">
+    </label>
+    <h3>Karakterler</h3>
+    <div id="charEditors"></div>
+    <div class="row">
+      <button class="btn" id="saveSettings">Kaydet</button>
+      <button class="btn ghost" id="clearHist" type="button">Sohbeti temizle</button>
+      <button class="btn ghost" id="closeSettings" type="button">Kapat</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+const BASE = "Türkçe konuş. Cevapların sesle okunacak: kısa ve doğal konuşma diliyle yaz; madde işareti, yıldız, başlık ve emoji kullanma. ";
+const DEFAULT_CHARS = [
+  {name:"Derin", color:"#5CC8E0", pitch:1,    prompt:"Kibar, sakin ve ölçülü bir asistansın. Net ve düzgün cevap verirsin."},
+  {name:"Şen",   color:"#F59BC1", pitch:1.15, prompt:"Samimi, neşeli ve enerjik bir asistansın. Arkadaş gibi konuşursun."},
+  {name:"Kuzey", color:"#E8C65A", pitch:0.85, prompt:"Soğukkanlı, kısa konuşan ve kendine has bir asistansın. Gereksiz laf etmezsin."}
+];
+
+let chars  = store.get("chars", DEFAULT_CHARS);
+let active = store.get("active", 0);
+let hist   = store.get("hist", {});
+let state  = "idle", rec = null, speakToken = 0;
+
+function applyColor(){
+  document.documentElement.style.setProperty("--accent", chars[active].color);
+}
+function renderChips(){
+  const box = $("#chips"); box.innerHTML = "";
+  chars.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = c.name;
+    b.setAttribute("aria-pressed", i === active);
+    b.onclick = () => { stopAll(); active = i; store.set("active", i); applyColor(); renderChips(); renderLog(); };
+    box.appendChild(b);
+  });
+}
+function renderLog(){
+  const log = $("#log"); log.innerHTML = "";
+  const h = hist[active] || [];
+  if(!h.length){
+    log.innerHTML = '<div class="empty"><strong>' + chars[active].name + '</strong>Mikrofona dokun ve konuş.</div>';
+    return;
+  }
+  h.forEach(m => addMsg(m.role === "user" ? "user" : "ai", m.parts[0].text, true));
+}
+function addMsg(kind, text, noScroll){
+  const log = $("#log");
+  const empty = log.querySelector(".empty"); if(empty) empty.remove();
+  const d = document.createElement("div");
+  d.className = "msg " + kind; d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+function setState(s){
+  state = s;
+  const orb = $("#orb");
+  orb.className = s === "idle" ? "" : s;
+  const labels = {idle:"", listening:"Dinliyorum… bitince tekrar dokun", thinking:"Düşünüyor…", speaking:"Konuşuyor… durdurmak için dokun"};
+  $("#status").textContent = labels[s];
+}
+
+/* --- Dinleme --- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function listen(){
+  if(!SR){ addMsg("err", "Bu tarayıcı sesle dinlemeyi desteklemiyor. Chrome kullan."); return; }
+  stopSpeak();
+  rec = new SR(); rec.lang = "tr-TR"; rec.interimResults = true; rec.maxAlternatives = 1;
+  let finalText = "";
+  rec.onresult = e => { let t = ""; for(const r of e.results) t += r[0].transcript; finalText = t; $("#txt").value = t; };
+  rec.onerror = e => {
+    if(e.error === "not-allowed" || e.error === "service-not-allowed")
+      addMsg("err", "Mikrofon izni verilmedi. Adres çubuğundaki kilit simgesinden izin ver.");
+    setState("idle");
+  };
+  rec.onend = () => {
+    if(state === "listening"){
+      setState("idle");
+      if(finalText.trim()){ $("#txt").value = ""; send(finalText); }
+    }
+  };
+  try{ rec.start(); setState("listening"); }catch(e){ setState("idle"); }
+}
+
+/* --- Konuşma --- */
+function stopSpeak(){ speakToken++; try{ speechSynthesis.cancel(); }catch(e){} if(state === "speaking") setState("idle"); }
+function stopAll(){ if(rec && state === "listening"){ state = "idle"; try{ rec.abort(); }catch(e){} } stopSpeak(); setState("idle"); }
+function speak(text){
+  if(!("speechSynthesis" in window)){ setState("idle"); return; }
+  const token = ++speakToken;
+  const clean = text.replace(/[*#_`>~]/g, "").replace(/\s+/g, " ").trim();
+  const parts = clean.match(/[^.!?\n]+[.!?]*/g) || [clean];
+  const voice = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith("tr"));
+  try{ speechSynthesis.cancel(); }catch(e){}
+  setState("speaking");
+  parts.forEach((p, i) => {
+    const u = new SpeechSynthesisUtterance(p.trim());
+    u.lang = "tr-TR"; if(voice) u.voice = voice;
+    u.rate = store.get("rate", 1); u.pitch = chars[active].pitch || 1;
+    if(i === parts.length - 1){
+      u.onend = u.onerror = () => { if(token === speakToken && state === "speaking") setState("idle"); };
+    }
+    speechSynthesis.speak(u);
+  });
+}
+if("speechSynthesis" in window) speechSynthesis.getVoices();
+
+/* --- Gemini --- */
+async function send(text){
+  text = text.trim();
+  if(!text || state === "thinking") return;
+  const key = store.get("key", "");
+  if(!key){ addMsg("err", "Önce ayarlardan Gemini anahtarını gir."); openSettings(); return; }
+  stopSpeak();
+  addMsg("user", text);
+  const h = hist[active] = hist[active] || [];
+  h.push({role:"user", parts:[{text}]});
+  setState("thinking");
+  try{
+    let contents = h.slice(-20);
+    while(contents.length && contents[0].role !== "user") contents.shift();
+    const model = store.get("model", "gemini-2.5-flash");
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
+      method:"POST",
+      headers:{"Content-Type":"application/json", "x-goog-api-key": key},
+      body: JSON.stringify({ system_instruction:{parts:[{text: BASE + chars[active].prompt}]}, contents })
+    });
+    const j = await r.json();
+    if(!r.ok) throw new Error((j.error && j.error.message) || ("Hata kodu " + r.status));
+    const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+    const out = parts.map(p => p.text || "").join("").trim();
+    if(!out) throw new Error("Boş cevap geldi, tekrar dene.");
+    h.push({role:"model", parts:[{text:out}]});
+    hist[active] = h.slice(-40); store.set("hist", hist);
+    addMsg("ai", out);
+    speak(out);
+  }catch(e){
+    h.pop();
+    addMsg("err", "Hata: " + e.message);
+    setState("idle");
+  }
+}
+
+/* --- Ayarlar --- */
+function openSettings(){
+  $("#keyIn").value = store.get("key", "");
+  $("#modelIn").value = store.get("model", "gemini-2.5-flash");
+  $("#rateIn").value = store.get("rate", 1);
+  const box = $("#charEditors"); box.innerHTML = "";
+  chars.forEach((c, i) => {
+    const d = document.createElement("div"); d.className = "charbox";
+    d.innerHTML = '<label>Ad<input data-i="' + i + '" data-f="name"></label><label>Kişilik<textarea data-i="' + i + '" data-f="prompt"></textarea></label>';
+    box.appendChild(d);
+    d.querySelector('[data-f="name"]').value = c.name;
+    d.querySelector('[data-f="prompt"]').value = c.prompt;
+  });
+  $("#settings").showModal();
+}
+$("#openSettings").onclick = openSettings;
+$("#closeSettings").onclick = () => $("#settings").close();
+$("#saveSettings").onclick = () => {
+  store.set("key", $("#keyIn").value.trim());
+  store.set("model", $("#modelIn").value.trim() || "gemini-2.5-flash");
+  store.set("rate", parseFloat($("#rateIn").value) || 1);
+  document.querySelectorAll("#charEditors [data-i]").forEach(el => {
+    const c = chars[+el.dataset.i]; c[el.dataset.f] = el.value.trim() || c[el.dataset.f];
+  });
+  store.set("chars", chars); renderChips(); renderLog();
+  $("#settings").close();
+};
+$("#clearHist").onclick = () => { hist = {}; store.set("hist", hist); renderLog(); $("#settings").close(); };
+
+/* --- Olaylar --- */
+$("#orb").onclick = () => {
+  if(state === "listening"){ try{ rec.stop(); }catch(e){} }
+  else if(state === "speaking"){ stopSpeak(); }
+  else if(state === "idle"){ listen(); }
+};
+$("#form").onsubmit = e => { e.preventDefault(); const t = $("#txt").value; $("#txt").value = ""; send(t); };
+
+applyColor(); renderChips(); renderLog(); setState("idle");
+if("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
