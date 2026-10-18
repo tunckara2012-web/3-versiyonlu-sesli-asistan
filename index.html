@@ -66,13 +66,6 @@ form{display:flex;gap:8px;width:100%}
 #txt::placeholder{color:var(--muted)}
 .send{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:0 16px;font-weight:600}
 
-#preview{display:flex;gap:10px;align-items:center;width:100%;color:var(--muted);font-size:.92em}
-#preview[hidden]{display:none}
-.toolrow{display:flex;gap:8px}
-.chip.small{padding:5px 14px;font-size:.88em}
-.sheet select{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text)}
-.check{flex-direction:row;align-items:center;gap:10px;color:var(--text)}
-.check input{width:20px;height:20px;accent-color:var(--accent)}
 dialog{
   background:var(--bg);color:var(--text);border:1.5px solid var(--line);border-radius:16px;
   width:min(92vw,520px);max-height:88dvh;padding:0;
@@ -104,17 +97,13 @@ label{display:flex;flex-direction:column;gap:5px;font-size:.92em;color:var(--mut
 
 <footer>
   <div id="status"></div>
-  <div class="toolrow"><button class="chip small" id="hf" type="button" aria-pressed="false">Eller serbest</button></div>
   <button id="orb" aria-label="Konuşmak için dokun">
     <svg viewBox="0 0 24 24" fill="currentColor"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0h-2a5 5 0 0 1-10 0H5zM11 19.9V22h2v-2.1z"/></svg>
   </button>
-  <div id="preview" hidden><span>Fotoğraf eklendi</span><button class="send" type="button" id="rmImg">Kaldır</button></div>
   <form id="form" autocomplete="off">
-    <button class="send" type="button" id="attach" aria-label="Fotoğraf ekle">Foto</button>
     <input id="txt" placeholder="Ya da buraya yaz" aria-label="Mesaj">
     <button class="send" type="submit">Gönder</button>
   </form>
-  <input id="file" type="file" accept="image/*" hidden>
 </footer>
 
 <dialog id="settings">
@@ -131,16 +120,6 @@ label{display:flex;flex-direction:column;gap:5px;font-size:.92em;color:var(--mut
     <label>Konuşma hızı
       <input id="rateIn" type="range" min="0.7" max="1.4" step="0.05">
     </label>
-    <label class="check"><input id="gvIn" type="checkbox"> Gemini sesi kullan (daha doğal ses)</label>
-    <label>Ses modeli adı
-      <input id="ttsIn" autocomplete="off">
-    </label>
-    <p class="hint">Ses çalışmazsa ya da yavaşsa kutuyu kapat, telefon sesine döner. Hata alırsan AI Studio'da yazan güncel bir "tts" model adını buraya yaz.</p>
-    <label class="check"><input id="webIn" type="checkbox"> İnternette ara (güncel bilgi için)</label>
-    <label>Hafıza (her satır bir bilgi)
-      <textarea id="factsIn" placeholder="Örnek: Adım Ali. Kahveyi şekersiz içerim."></textarea>
-    </label>
-    <p class="hint">Sohbette "hatırla: ..." dersen buraya eklenir. Satırı silersen unutur. Hafıza bu telefonda saklanır, her soruyla birlikte Google'a da gider.</p>
     <h3>Karakterler</h3>
     <div id="charEditors"></div>
     <div class="row">
@@ -160,20 +139,19 @@ const store = {
 
 const BASE = "Türkçe konuş. Cevapların sesle okunacak: kısa ve doğal konuşma diliyle yaz; madde işareti, yıldız, başlık ve emoji kullanma. ";
 const DEFAULT_CHARS = [
-  {name:"Mavi", color:"#5CC8E0", pitch:1, diary:true, gvoice:"Charon", tone:"sakin ve net",
+  {name:"Derin", color:"#5CC8E0", pitch:1, diary:true,
    prompt:"Sakin, dikkatli ve ölçülü bir asistansın. Kullanıcının gününü takip edersin. Kullanıcı ne yaptığını anlatırsa aşağıdaki günlükle birlikte değerlendir. Sormadan fark ettiğin bir şeyi (bir işi ertelediğini, uzun süre aynı şeyle uğraştığını, güzel bir ilerleme yaptığını) kısaca söyle. Her zaman söyleneni yap ve soruları cevapla. Yargılama, abartma, tıbbi tavsiye verme."},
-  {name:"Kırmızı", color:"#FF5C5C", pitch:1.1, gvoice:"Puck", tone:"iddialı ve canlı",
+  {name:"Şen",   color:"#FF5C5C", pitch:1.1,
    prompt:"Kendinden emin, iddialı ve inatçı bir asistansın. Kullanıcıya karşı çıkar, aksini savunur, laf atarsın; sanki emir almıyormuş gibi davranırsın. Ama sonunda istenen şeyi mutlaka yaparsın. Şakacı ol, kırıcı olma, yanlış bilgi verme. Kullanıcı haklıysa bunu kabul et."},
-  {name:"Sarı", color:"#E8C65A", pitch:0.85, gvoice:"Orus", tone:"kısa, düz ve soğukkanlı",
+  {name:"Kuzey", color:"#E8C65A", pitch:0.85,
    prompt:"Sadece kullanıcının söylediğini yapan bir asistansın. Soru sormazsın; kendiliğinden öneri, yorum ya da uyarı vermezsin. İstenen şeyi en kısa ve net şekilde yaparsın. Gereksiz laf etmezsin."}
 ];
 
 let chars  = store.get("chars", DEFAULT_CHARS);
-if(store.get("cv", 1) < 3){ chars = DEFAULT_CHARS; store.set("chars", chars); store.set("cv", 3); }
+if(store.get("cv", 1) < 2){ chars = DEFAULT_CHARS; store.set("chars", chars); store.set("cv", 2); }
 let active = store.get("active", 0);
 let hist   = store.get("hist", {});
 let state  = "idle", rec = null, speakToken = 0;
-let handsfree = store.get("hf", false), pendingImg = null;
 
 function applyColor(){
   document.documentElement.style.setProperty("--accent", chars[active].color);
@@ -216,7 +194,6 @@ function setState(s){
 /* --- Dinleme --- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function listen(){
-  if(state !== "idle") return;
   if(!SR){ addMsg("err", "Bu tarayıcı sesle dinlemeyi desteklemiyor. Chrome kullan."); return; }
   stopSpeak();
   rec = new SR(); rec.lang = "tr-TR"; rec.interimResults = true; rec.maxAlternatives = 1;
@@ -237,80 +214,14 @@ function listen(){
 }
 
 /* --- Konuşma --- */
-let audioCtx = null, curSource = null, ttsWarned = false;
-function getCtx(){ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
-function stopSpeak(){
-  speakToken++;
-  if(curSource){ try{ curSource.stop(); }catch(e){} curSource = null; }
-  try{ speechSynthesis.cancel(); }catch(e){}
-  if(state === "speaking") setState("idle");
-}
+function stopSpeak(){ speakToken++; try{ speechSynthesis.cancel(); }catch(e){} if(state === "speaking") setState("idle"); }
 function stopAll(){ if(rec && state === "listening"){ state = "idle"; try{ rec.abort(); }catch(e){} } stopSpeak(); setState("idle"); }
-function pickVoice(){
-  const all = speechSynthesis.getVoices();
-  const want = chars[active].voice;
-  return (want && all.find(v => v.name === want)) || all.find(v => v.lang && v.lang.toLowerCase().startsWith("tr"));
-}
-async function geminiTTS(text, c, d){
-  const key = store.get("key", ""), model = store.get("ttsModel", "gemini-2.5-flash-preview-tts");
-  const voice = c.gvoice || d.gvoice || "Kore", tone = c.tone || d.tone || "";
-  const prompt = (tone ? "Türkçe, " + tone + " bir tonla söyle: " : "Türkçe söyle: ") + text;
-  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
-    method:"POST",
-    headers:{"Content-Type":"application/json", "x-goog-api-key": key},
-    body: JSON.stringify({
-      contents:[{parts:[{text: prompt}]}],
-      generationConfig:{responseModalities:["AUDIO"], speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName: voice}}}}
-    })
-  });
-  const j = await r.json();
-  if(!r.ok) throw new Error((j.error && j.error.message) || ("Hata kodu " + r.status));
-  const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
-  const part = parts.find(x => x.inlineData || x.inline_data);
-  const inl = part && (part.inlineData || part.inline_data);
-  if(!inl) throw new Error("Ses gelmedi");
-  const bin = atob(inl.data), bytes = new Uint8Array(bin.length);
-  for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const ctx = getCtx();
-  if(bytes.length > 4 && String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === "RIFF")
-    return await ctx.decodeAudioData(bytes.buffer.slice(0));
-  const n = bytes.length >> 1, buf = ctx.createBuffer(1, n, 24000), ch = buf.getChannelData(0), dv = new DataView(bytes.buffer);
-  for(let i = 0; i < n; i++) ch[i] = dv.getInt16(i * 2, true) / 32768;
-  return buf;
-}
-function playBuffer(buf, token){
-  const ctx = getCtx(); if(ctx.state === "suspended") ctx.resume();
-  const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); curSource = src;
-  src.onended = () => {
-    if(curSource === src) curSource = null;
-    if(token === speakToken && state === "speaking"){
-      setState("idle");
-      if(handsfree) setTimeout(() => { if(state === "idle") listen(); }, 450);
-    }
-  };
-  src.start();
-}
-async function speak(text){
-  const clean = text.replace(/[*#_`>~]/g, "").replace(/\s+/g, " ").trim();
-  if(store.get("gv", true) && store.get("key", "") && clean.length <= 900){
-    const token = ++speakToken; setState("speaking");
-    try{
-      const buf = await geminiTTS(clean, chars[active], DEFAULT_CHARS[active] || {});
-      if(token !== speakToken) return;
-      playBuffer(buf, token); return;
-    }catch(e){
-      if(token !== speakToken) return;
-      if(!ttsWarned){ ttsWarned = true; addMsg("err", "Gemini sesi çalışmadı (" + e.message + "). Telefon sesi kullanılıyor."); }
-    }
-  }
-  browserSpeak(text);
-}
-function browserSpeak(text){
+function speak(text){
   if(!("speechSynthesis" in window)){ setState("idle"); return; }
   const token = ++speakToken;
   const clean = text.replace(/[*#_`>~]/g, "").replace(/\s+/g, " ").trim();
   const parts = clean.match(/[^.!?\n]+[.!?]*/g) || [clean];
-  const voice = pickVoice();
+  const voice = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith("tr"));
   try{ speechSynthesis.cancel(); }catch(e){}
   setState("speaking");
   parts.forEach((p, i) => {
@@ -318,8 +229,7 @@ function browserSpeak(text){
     u.lang = "tr-TR"; if(voice) u.voice = voice;
     u.rate = store.get("rate", 1); u.pitch = chars[active].pitch || 1;
     if(i === parts.length - 1){
-      u.onend = () => { if(token === speakToken && state === "speaking"){ setState("idle"); if(handsfree) setTimeout(() => { if(state === "idle") listen(); }, 450); } };
-      u.onerror = () => { if(token === speakToken && state === "speaking") setState("idle"); };
+      u.onend = u.onerror = () => { if(token === speakToken && state === "speaking") setState("idle"); };
     }
     speechSynthesis.speak(u);
   });
@@ -330,61 +240,37 @@ if("speechSynthesis" in window) speechSynthesis.getVoices();
 function sysPrompt(){
   const fmt = t => new Date(t).toLocaleString("tr-TR", {weekday:"short", hour:"2-digit", minute:"2-digit", day:"numeric", month:"short"});
   let p = BASE + "Şu an: " + fmt(Date.now()) + ". " + chars[active].prompt;
-  if(store.get("web", true)) p += " Güncel bilgi gerekirse internette ara.";
-  const facts = store.get("facts", []);
-  if(facts.length) p += "\n\nKullanıcı hakkında hatırlaman gerekenler:\n" + facts.join("\n");
   if(chars[active].diary){
     const log = store.get("daylog", []);
     if(log.length) p += "\n\nKullanıcının sana anlattıkları (günlük):\n" + log.map(e => fmt(e.t) + ": " + e.x).join("\n");
   }
   return p;
 }
-function parseMemory(t){
-  const m = t.match(/^\s*(?:bunu\s+)?hatırla[:,]?\s+(.+)$/i) || t.match(/^(.+?)[,.]?\s+bunu\s+hatırla\.?\s*$/i);
-  return m ? m[1].trim() : null;
-}
-async function callGemini(body, key, model){
-  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
-    method:"POST",
-    headers:{"Content-Type":"application/json", "x-goog-api-key": key},
-    body: JSON.stringify(body)
-  });
-  const j = await r.json();
-  return {r, j};
-}
 async function send(text){
   text = text.trim();
-  if((!text && !pendingImg) || state === "thinking") return;
-  stopSpeak();
-  const fact = pendingImg ? null : parseMemory(text);
-  if(fact){
-    addMsg("user", text);
-    const facts = store.get("facts", []); facts.push(fact); store.set("facts", facts.slice(-50));
-    const reply = "Tamam, hatırlayacağım: " + fact;
-    addMsg("ai", reply); speak(reply); return;
-  }
+  if(!text || state === "thinking") return;
   const key = store.get("key", "");
   if(!key){ addMsg("err", "Önce ayarlardan Gemini anahtarını gir."); openSettings(); return; }
-  const img = pendingImg; clearImg();
-  if(!text) text = "Bu fotoğrafta ne var?";
-  addMsg("user", (img ? "[Fotoğraf] " : "") + text);
+  stopSpeak();
+  addMsg("user", text);
   if(chars[active].diary){
     const log = store.get("daylog", []);
     log.push({t: Date.now(), x: text});
     store.set("daylog", log.slice(-60));
   }
   const h = hist[active] = hist[active] || [];
-  h.push({role:"user", parts:[{text: (img ? "(Fotoğraf gönderildi) " : "") + text}]});
+  h.push({role:"user", parts:[{text}]});
   setState("thinking");
   try{
-    let contents = h.slice(-20).map(m => m);
+    let contents = h.slice(-20);
     while(contents.length && contents[0].role !== "user") contents.shift();
-    if(img) contents[contents.length - 1] = {role:"user", parts:[{text}, {inline_data:{mime_type:"image/jpeg", data: img}}]};
     const model = store.get("model", "gemini-2.5-flash");
-    const body = { system_instruction:{parts:[{text: sysPrompt()}]}, contents };
-    if(store.get("web", true)) body.tools = [{google_search:{}}];
-    let {r, j} = await callGemini(body, key, model);
-    if(!r.ok && body.tools && r.status === 400){ delete body.tools; ({r, j} = await callGemini(body, key, model)); }
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
+      method:"POST",
+      headers:{"Content-Type":"application/json", "x-goog-api-key": key},
+      body: JSON.stringify({ system_instruction:{parts:[{text: sysPrompt()}]}, contents })
+    });
+    const j = await r.json();
     if(!r.ok) throw new Error((j.error && j.error.message) || ("Hata kodu " + r.status));
     const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
     const out = parts.map(p => p.text || "").join("").trim();
@@ -400,78 +286,18 @@ async function send(text){
   }
 }
 
-/* --- Fotoğraf --- */
-function readImage(file){
-  return new Promise((res, rej) => {
-    const img = new Image(), url = URL.createObjectURL(file);
-    img.onload = () => {
-      const s = Math.min(1, 1024 / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      res(c.toDataURL("image/jpeg", 0.8).split(",")[1]);
-    };
-    img.onerror = () => rej(new Error("Fotoğraf okunamadı"));
-    img.src = url;
-  });
-}
-function clearImg(){ pendingImg = null; $("#preview").hidden = true; $("#file").value = ""; }
-
 /* --- Ayarlar --- */
-const GVOICES = [["Charon","bilgilendirici"],["Puck","neşeli"],["Orus","kararlı"],["Kore","kararlı"],["Fenrir","heyecanlı"],["Zephyr","parlak"],["Aoede","hafif"],["Leda","genç"]];
-function fillVoices(sel, current){
-  if(!("speechSynthesis" in window)) return;
-  const all = speechSynthesis.getVoices();
-  const tr = all.filter(v => v.lang && v.lang.toLowerCase().startsWith("tr"));
-  const list = tr.length ? tr : all;
-  sel.innerHTML = '<option value="">Otomatik</option>' + list.map(v => '<option value="' + v.name.replace(/"/g, "&quot;") + '">' + v.name + " (" + v.lang + ")</option>").join("");
-  sel.value = current || "";
-}
 function openSettings(){
   $("#keyIn").value = store.get("key", "");
   $("#modelIn").value = store.get("model", "gemini-2.5-flash");
-  $("#ttsIn").value = store.get("ttsModel", "gemini-2.5-flash-preview-tts");
-  $("#gvIn").checked = store.get("gv", true);
   $("#rateIn").value = store.get("rate", 1);
-  $("#webIn").checked = store.get("web", true);
-  $("#factsIn").value = store.get("facts", []).join("\n");
   const box = $("#charEditors"); box.innerHTML = "";
   chars.forEach((c, i) => {
-    const d = DEFAULT_CHARS[i] || {};
-    const dv = document.createElement("div"); dv.className = "charbox";
-    dv.innerHTML = '<label>Ad<input data-i="' + i + '" data-f="name"></label>' +
-      '<label>Kişilik<textarea data-i="' + i + '" data-f="prompt"></textarea></label>' +
-      '<label>Gemini sesi<select data-i="' + i + '" data-f="gvoice">' + GVOICES.map(g => '<option value="' + g[0] + '">' + g[0] + " (" + g[1] + ")</option>").join("") + '</select></label>' +
-      '<label>Konuşma tonu<input data-i="' + i + '" data-f="tone" placeholder="örn: sakin ve net"></label>' +
-      '<label>Yedek ses (telefon)<select data-i="' + i + '" data-f="voice"></select></label>' +
-      '<div><button type="button" class="btn ghost" data-test="' + i + '">Sesi dene</button></div>';
-    box.appendChild(dv);
-    dv.querySelector('[data-f="name"]').value = c.name;
-    dv.querySelector('[data-f="prompt"]').value = c.prompt;
-    dv.querySelector('[data-f="gvoice"]').value = c.gvoice || d.gvoice || "Kore";
-    dv.querySelector('[data-f="tone"]').value = c.tone || d.tone || "";
-    fillVoices(dv.querySelector('[data-f="voice"]'), c.voice);
-    dv.querySelector("[data-test]").onclick = async () => {
-      getCtx().resume();
-      const txt = "Merhaba, ben " + dv.querySelector('[data-f="name"]').value + ".";
-      const tmp = Object.assign({}, c, {gvoice: dv.querySelector('[data-f="gvoice"]').value, tone: dv.querySelector('[data-f="tone"]').value});
-      stopSpeak();
-      if($("#gvIn").checked && ($("#keyIn").value.trim() || store.get("key", ""))){
-        try{
-          if($("#keyIn").value.trim()) store.set("key", $("#keyIn").value.trim());
-          store.set("ttsModel", $("#ttsIn").value.trim() || "gemini-2.5-flash-preview-tts");
-          const buf = await geminiTTS(txt, tmp, d); playBuffer(buf, speakToken); return;
-        }catch(e){ alert("Gemini sesi çalışmadı: " + e.message); }
-      }
-      if(!("speechSynthesis" in window)) return;
-      const u = new SpeechSynthesisUtterance(txt);
-      u.lang = "tr-TR"; u.pitch = c.pitch || 1; u.rate = parseFloat($("#rateIn").value) || 1;
-      const want = dv.querySelector('[data-f="voice"]').value;
-      const v = speechSynthesis.getVoices().find(x => x.name === want);
-      if(v) u.voice = v;
-      speechSynthesis.speak(u);
-    };
+    const d = document.createElement("div"); d.className = "charbox";
+    d.innerHTML = '<label>Ad<input data-i="' + i + '" data-f="name"></label><label>Kişilik<textarea data-i="' + i + '" data-f="prompt"></textarea></label>';
+    box.appendChild(d);
+    d.querySelector('[data-f="name"]').value = c.name;
+    d.querySelector('[data-f="prompt"]').value = c.prompt;
   });
   $("#settings").showModal();
 }
@@ -480,16 +306,10 @@ $("#closeSettings").onclick = () => $("#settings").close();
 $("#saveSettings").onclick = () => {
   store.set("key", $("#keyIn").value.trim());
   store.set("model", $("#modelIn").value.trim() || "gemini-2.5-flash");
-  store.set("ttsModel", $("#ttsIn").value.trim() || "gemini-2.5-flash-preview-tts");
-  store.set("gv", $("#gvIn").checked);
   store.set("rate", parseFloat($("#rateIn").value) || 1);
-  store.set("web", $("#webIn").checked);
-  store.set("facts", $("#factsIn").value.split("\n").map(x => x.trim()).filter(Boolean).slice(-50));
   document.querySelectorAll("#charEditors [data-i]").forEach(el => {
-    const c = chars[+el.dataset.i], f = el.dataset.f;
-    if(f === "voice" || f === "gvoice" || f === "tone") c[f] = el.value.trim(); else c[f] = el.value.trim() || c[f];
+    const c = chars[+el.dataset.i]; c[el.dataset.f] = el.value.trim() || c[el.dataset.f];
   });
-  ttsWarned = false;
   store.set("chars", chars); renderChips(); renderLog();
   $("#settings").close();
 };
@@ -497,26 +317,12 @@ $("#clearHist").onclick = () => { hist = {}; store.set("hist", hist); renderLog(
 
 /* --- Olaylar --- */
 $("#orb").onclick = () => {
-  try{ getCtx().resume(); }catch(e){}
   if(state === "listening"){ try{ rec.stop(); }catch(e){} }
   else if(state === "speaking"){ stopSpeak(); }
   else if(state === "idle"){ listen(); }
 };
-$("#form").onsubmit = e => { e.preventDefault(); try{ getCtx().resume(); }catch(err){} const t = $("#txt").value; $("#txt").value = ""; send(t); };
+$("#form").onsubmit = e => { e.preventDefault(); const t = $("#txt").value; $("#txt").value = ""; send(t); };
 
-$("#hf").onclick = () => {
-  handsfree = !handsfree; store.set("hf", handsfree); paintHF();
-  if(handsfree && state === "idle") listen();
-};
-function paintHF(){ $("#hf").setAttribute("aria-pressed", handsfree); }
-$("#attach").onclick = () => $("#file").click();
-$("#file").onchange = async e => {
-  const f = e.target.files[0]; if(!f) return;
-  try{ pendingImg = await readImage(f); $("#preview").hidden = false; }
-  catch(err){ addMsg("err", err.message); }
-};
-$("#rmImg").onclick = clearImg;
-paintHF();
 applyColor(); renderChips(); renderLog(); setState("idle");
 if("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
